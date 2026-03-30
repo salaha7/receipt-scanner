@@ -1,0 +1,7 @@
+*.xlsx
+*.jpg
+*.jpeg
+*.png
+*.pdf
+receipt photos/
+settings.local.json
