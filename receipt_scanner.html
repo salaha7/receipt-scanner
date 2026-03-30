@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipt Scanner — Al Salam Halal</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#f4f4f8;color:#1a1a2e;min-height:100vh;}
+.app{max-width:700px;margin:0 auto;padding:16px;}
+
+/* Header */
+.header{background:#7B1A1A;color:#fff;padding:18px 20px;border-radius:12px;margin-bottom:16px;}
+.header h1{font-size:20px;font-weight:600;margin-bottom:2px;}
+.header p{font-size:13px;opacity:.8;}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;margin-bottom:16px;}
+.tab{flex:1;padding:10px;background:#fff;border:1.5px solid #ddd;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;text-align:center;transition:.15s;}
+.tab.active{background:#7B1A1A;color:#fff;border-color:#7B1A1A;}
+
+/* Cards */
+.card{background:#fff;border-radius:12px;border:1px solid #e0e0e8;padding:20px;margin-bottom:14px;}
+.card h2{font-size:15px;font-weight:600;margin-bottom:14px;color:#1a1a2e;}
+
+/* Camera */
+#video{width:100%;border-radius:8px;background:#000;}
+.cam-controls{display:flex;gap:10px;margin-top:10px;}
+.btn{padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:500;}
+.btn-primary{background:#7B1A1A;color:#fff;}
+.btn-primary:hover{background:#9B2222;}
+.btn-secondary{background:#f0f0f6;color:#333;border:1px solid #ddd;}
+.btn-secondary:hover{background:#e4e4ee;}
+.btn-green{background:#1B5E20;color:#fff;}
+.btn-green:hover{background:#2E7D32;}
+.btn-full{width:100%;}
+
+/* Upload area */
+.upload-area{border:2px dashed #ccc;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:.15s;}
+.upload-area:hover{border-color:#7B1A1A;background:#fdf5f5;}
+.upload-area p{color:#888;font-size:14px;margin-top:8px;}
+#fileInput{display:none;}
+
+/* Progress */
+.progress-wrap{margin-top:12px;}
+.progress-bar{height:6px;background:#eee;border-radius:4px;overflow:hidden;}
+.progress-fill{height:100%;background:#7B1A1A;transition:width .3s;width:0%;}
+.progress-label{font-size:12px;color:#888;margin-top:4px;}
+
+/* Status */
+.status{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;}
+.status.info{background:#e3f2fd;color:#0D47A1;}
+.status.success{background:#e8f5e9;color:#1B5E20;}
+.status.error{background:#ffebee;color:#B71C1C;}
+.status.warning{background:#fff8e1;color:#E65100;}
+
+/* Store info */
+.store-info{background:#fdf5f5;border:1px solid #f0c0c0;border-radius:8px;padding:14px;margin-bottom:14px;}
+.store-info h3{font-size:13px;font-weight:600;color:#7B1A1A;margin-bottom:6px;}
+.store-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;}
+.store-field{display:flex;flex-direction:column;}
+.store-field label{font-size:11px;color:#888;}
+.store-field input{border:1px solid #ddd;border-radius:5px;padding:5px 8px;font-size:13px;margin-top:2px;}
+
+/* Items table */
+.table-wrap{overflow-x:auto;margin-bottom:12px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:#7B1A1A;color:#fff;padding:8px 10px;text-align:left;font-weight:500;}
+td{padding:7px 10px;border-bottom:1px solid #f0f0f0;}
+tr:hover td{background:#fdf5f5;}
+.td-num{text-align:right;}
+td input{border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:100%;}
+td input.num{text-align:right;width:70px;}
+.del-btn{background:none;border:none;color:#cc3333;cursor:pointer;font-size:16px;padding:0 4px;}
+
+/* Totals */
+.totals-box{background:#1a1a2e;color:#fff;border-radius:8px;padding:14px 18px;}
+.total-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+.total-row.grand{border-top:1px solid #444;margin-top:6px;padding-top:8px;font-size:16px;font-weight:600;}
+.total-row.grand span:last-child{color:#FFD700;}
+
+/* Add item */
+.add-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.add-row input{flex:1;min-width:120px;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:13px;}
+.add-row input.sm{max-width:90px;}
+
+/* History */
+.hist-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;}
+.hist-item:last-child{border-bottom:none;}
+.hist-meta{font-size:12px;color:#888;margin-top:2px;}
+.hist-actions{display:flex;gap:6px;}
+.badge{display:inline-block;background:#e8f5e9;color:#1B5E20;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500;}
+
+/* Spinner */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #ccc;border-top-color:#7B1A1A;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <h1>📋 Receipt Scanner & Calculator</h1>
+    <p>Scan, edit & export receipts to Excel</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('scan')">📷 Scan / Upload</div>
+    <div class="tab" onclick="showTab('edit')">✏️ Edit & Calculate</div>
+    <div class="tab" onclick="showTab('history')">📁 History</div>
+  </div>
+
+  <!-- ═══════════════════ SCAN TAB ═══════════════════ -->
+  <div id="tab-scan">
+
+    <div class="card">
+      <h2>📷 Camera Scan</h2>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" class="hidden"></canvas>
+      <div class="cam-controls">
+        <button class="btn btn-primary" id="startCam" onclick="startCamera()">Start Camera</button>
+        <button class="btn btn-secondary hidden" id="captureBtn" onclick="captureFrame()">📸 Capture</button>
+        <button class="btn btn-secondary hidden" id="stopCam" onclick="stopCamera()">Stop</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📁 Upload Image</h2>
+      <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <div style="font-size:36px;">🧾</div>
+        <p>Click to upload receipt photo (JPG, PNG, PDF)</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,application/pdf" onchange="handleFile(event)">
+    </div>
+
+    <div id="ocrStatus" class="hidden"></div>
+
+    <div class="card hidden" id="previewCard">
+      <h2>Preview</h2>
+      <img id="previewImg" style="width:100%;border-radius:8px;">
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel">Ready</div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-primary btn-full" onclick="runOCR()">🔍 Extract Text with OCR</button>
+      </div>
+    </div>
+
+    <!-- Manual entry shortcut -->
+    <div class="card">
+      <h2>✍️ Manual Entry</h2>
+      <p style="font-size:13px;color:#888;margin-bottom:12px;">Or type your receipt directly without scanning</p>
+      <button class="btn btn-secondary btn-full" onclick="loadSample(); showTab('edit')">Load Today's Al Salam Receipt</button>
+      <button class="btn btn-primary btn-full" style="margin-top:8px;" onclick="newReceipt(); showTab('edit')">+ New Blank Receipt</button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════ EDIT TAB ═══════════════════ -->
+  <div id="tab-edit" class="hidden">
+
+    <div class="card">
+      <h2>🏪 Store Information</h2>
+      <div class="store-info">
+        <h3>Receipt Details</h3>
+        <div class="store-grid">
+          <div class="store-field"><label>Store Name</label><input id="storeName" value="AL SALAM HALAL MEAT"></div>
+          <div class="store-field"><label>Invoice #</label><input id="invNum" value="25520"></div>
+          <div class="store-field"><label>Date</label><input id="recDate" type="date" value="2026-03-17"></div>
+          <div class="store-field"><label>Time</label><input id="recTime" value="04:10 PM"></div>
+          <div class="store-field"><label>Cashier</label><input id="cashier" value="admin"></div>
+          <div class="store-field"><label>Payment</label><input id="payment" value="VISA"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🛒 Items</h2>
+      <div class="table-wrap">
+        <table id="itemsTable">
+          <thead>
+            <tr>
+              <th style="width:40%">Item</th>
+              <th style="width:12%">Qty</th>
+              <th style="width:16%">Price</th>
+              <th style="width:16%">Total</th>
+              <th style="width:8%"></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Add item row -->
+      <div class="add-row">
+        <input id="newItem" placeholder="Item name" style="flex:2;">
+        <input id="newQty" placeholder="Qty" class="sm" type="number" value="1" min="0.01" step="0.01">
+        <input id="newPrice" placeholder="Price $" class="sm" type="number" step="0.01">
+        <button class="btn btn-primary" onclick="addItem()">+ Add</button>
+      </div>
+
+      <!-- Totals -->
+      <div class="totals-box" style="margin-top:16px;">
+        <div class="total-row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+        <div class="total-row">
+          <span>GST (5%)
+            <input id="gstToggle" type="checkbox" style="margin-left:6px;" onchange="recalc()">
+          </span>
+          <span id="gstAmt">$0.00</span>
+        </div>
+        <div class="total-row">
+          <span>PST (7%)
+            <input id="pstToggle" type="checkbox" style="margin-left:6px;" onchange="recalc()">
+          </span>
+          <span id="pstAmt">$0.00</span>
+        </div>
+        <div class="total-row grand">
+          <span>TOTAL</span>
+          <span id="grandTotal">$0.00</span>
+        </div>
+        <div class="total-row" style="margin-top:8px;font-size:12px;opacity:.7;">
+          <span>Items count</span><span id="itemCount">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-green" style="flex:1;" onclick="exportExcel()">📊 Export to Excel</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="saveReceipt()">💾 Save to History</button>
+      <button class="btn btn-secondary" style="flex:1;" onclick="printReceipt()">🖨️ Print</button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════ HISTORY TAB ═══════════════════ -->
+  <div id="tab-history" class="hidden">
+    <div class="card">
+      <h2>📁 Saved Receipts</h2>
+      <div id="historyList"><p style="color:#888;font-size:14px;">No saved receipts yet.</p></div>
+    </div>
+    <button class="btn btn-green btn-full" onclick="exportAllExcel()">📊 Export ALL to Excel</button>
+  </div>
+
+</div>
+
+<script>
+var items = [];
+var history_data = JSON.parse(localStorage.getItem('receipts') || '[]');
+var stream = null;
+var capturedImage = null;
+
+// ── Tab switching ──
+function showTab(t){
+  ['scan','edit','history'].forEach(function(id){
+    document.getElementById('tab-'+id).classList.toggle('hidden', id!==t);
+  });
+  document.querySelectorAll('.tab').forEach(function(el,i){
+    el.classList.toggle('active', ['scan','edit','history'][i]===t);
+  });
+  if(t==='history') renderHistory();
+}
+
+// ── Sample data ──
+function loadSample(){
+  document.getElementById('storeName').value='AL SALAM HALAL MEAT';
+  document.getElementById('invNum').value='25520';
+  document.getElementById('recDate').value='2026-03-17';
+  document.getElementById('recTime').value='04:10 PM';
+  document.getElementById('cashier').value='admin';
+  document.getElementById('payment').value='VISA';
+  items=[
+    {name:'HIMALAYA PLAIN YOGUR 750G',qty:1,price:4.29},
+    {name:'AL SAFA BEEF SAMOSA 300G',qty:1,price:9.99},
+    {name:'ALSAFA CHICKEN TENDER',qty:1,price:9.99},
+    {name:'AL SAFA BEEF SEEKH KABAB',qty:1,price:14.49},
+    {name:'HADIM MAAMOUL WHOLE 400G',qty:1,price:7.59},
+    {name:'GOLDEN PITA WHITE',qty:1,price:1.49},
+    {name:'GOLDEN PITA WHITE',qty:1,price:1.49},
+    {name:'INDOMIE',qty:1,price:5.49},
+    {name:'ULKER TEA BISCUIT 800G',qty:1,price:7.49},
+    {name:'VIMTO CONCENTRATED FRUIT MIX 45ML',qty:1,price:7.99},
+    {name:'BURCU WHITE BEANS',qty:1,price:2.99},
+  ];
+  renderItems();
+}
+
+function newReceipt(){
+  items=[];
+  document.getElementById('storeName').value='';
+  document.getElementById('invNum').value='';
+  document.getElementById('recDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('recTime').value='';
+  document.getElementById('cashier').value='';
+  document.getElementById('payment').value='';
+  renderItems();
+}
+
+// ── Items rendering ──
+function renderItems(){
+  var body=document.getElementById('itemsBody');
+  body.innerHTML='';
+  items.forEach(function(item,i){
+    var total=(item.qty*item.price).toFixed(2);
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td><input value="'+esc(item.name)+'" onchange="items['+i+'].name=this.value;recalc()"></td>'+
+      '<td><input class="num" type="number" value="'+item.qty+'" min="0.01" step="0.01" onchange="items['+i+'].qty=parseFloat(this.value)||0;recalc()"></td>'+
+      '<td><input class="num" type="number" value="'+item.price+'" step="0.01" onchange="items['+i+'].price=parseFloat(this.value)||0;recalc()"></td>'+
+      '<td class="td-num">$'+total+'</td>'+
+      '<td><button class="del-btn" onclick="removeItem('+i+')">✕</button></td>';
+    body.appendChild(tr);
+  });
+  recalc();
+}
+
+function esc(s){ return (s||'').replace(/"/g,'&quot;'); }
+
+function addItem(){
+  var n=document.getElementById('newItem').value.trim();
+  var q=parseFloat(document.getElementById('newQty').value)||1;
+  var p=parseFloat(document.getElementById('newPrice').value)||0;
+  if(!n){alert('Enter item name');return;}
+  items.push({name:n,qty:q,price:p});
+  document.getElementById('newItem').value='';
+  document.getElementById('newQty').value='1';
+  document.getElementById('newPrice').value='';
+  renderItems();
+}
+
+function removeItem(i){ items.splice(i,1); renderItems(); }
+
+function recalc(){
+  var sub=items.reduce(function(s,it){return s+it.qty*it.price;},0);
+  var gst=document.getElementById('gstToggle').checked?sub*0.05:0;
+  var pst=document.getElementById('pstToggle').checked?sub*0.07:0;
+  var grand=sub+gst+pst;
+  document.getElementById('subtotal').textContent='$'+sub.toFixed(2);
+  document.getElementById('gstAmt').textContent='$'+gst.toFixed(2);
+  document.getElementById('pstAmt').textContent='$'+pst.toFixed(2);
+  document.getElementById('grandTotal').textContent='$'+grand.toFixed(2);
+  document.getElementById('itemCount').textContent=items.length;
+  // refresh totals in cells
+  var cells=document.querySelectorAll('#itemsBody tr td:nth-child(4)');
+  items.forEach(function(it,i){if(cells[i])cells[i].textContent='$'+(it.qty*it.price).toFixed(2);});
+}
+
+// ── Camera ──
+function startCamera(){
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(s){
+    stream=s;
+    var v=document.getElementById('video');
+    v.srcObject=s;
+    document.getElementById('startCam').classList.add('hidden');
+    document.getElementById('captureBtn').classList.remove('hidden');
+    document.getElementById('stopCam').classList.remove('hidden');
+  }).catch(function(){
+    showStatus('Camera access denied. Use Upload instead.','error');
+  });
+}
+
+function stopCamera(){
+  if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null;}
+  document.getElementById('startCam').classList.remove('hidden');
+  document.getElementById('captureBtn').classList.add('hidden');
+  document.getElementById('stopCam').classList.add('hidden');
+}
+
+function captureFrame(){
+  var v=document.getElementById('video');
+  var c=document.getElementById('canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  capturedImage=c.toDataURL('image/png');
+  showPreview(capturedImage);
+  stopCamera();
+}
+
+// ── File upload ──
+function handleFile(e){
+  var file=e.target.files[0];
+  if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    capturedImage=ev.target.result;
+    showPreview(capturedImage);
+  };
+  reader.readAsDataURL(file);
+}
+
+function showPreview(src){
+  document.getElementById('previewImg').src=src;
+  document.getElementById('previewCard').classList.remove('hidden');
+}
+
+// ── OCR ──
+function runOCR(){
+  if(!capturedImage){showStatus('No image loaded.','error');return;}
+  showStatus('<span class="spinner"></span>Running OCR… this may take 10–30 seconds','info');
+  document.getElementById('progressFill').style.width='5%';
+  document.getElementById('progressLabel').textContent='Starting OCR…';
+
+  Tesseract.recognize(capturedImage,'eng',{
+    logger:function(m){
+      if(m.status==='recognizing text'){
+        var pct=Math.round(m.progress*100);
+        document.getElementById('progressFill').style.width=pct+'%';
+        document.getElementById('progressLabel').textContent='Reading text: '+pct+'%';
+      }
+    }
+  }).then(function(result){
+    document.getElementById('progressFill').style.width='100%';
+    document.getElementById('progressLabel').textContent='Done!';
+    parseOCRText(result.data.text);
+  }).catch(function(err){
+    showStatus('OCR failed: '+err.message,'error');
+  });
+}
+
+function parseOCRText(raw){
+  var lines=raw.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var parsed=[];
+  var storeLine=''; var invLine=''; var dateLine='';
+
+  lines.forEach(function(line,i){
+    // Store name — first meaningful line
+    if(i===0 && line.length>3) storeLine=line;
+
+    // Invoice number
+    var invM=line.match(/INV[#:\s]+(\d+)/i);
+    if(invM) invLine=invM[1];
+
+    // Date
+    var dateM=line.match(/(\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2})/);
+    if(dateM) dateLine=dateM[1];
+
+    // Item rows: NAME  QTY  PRICE  TOTAL
+    // Try pattern: text followed by numbers
+    var m=line.match(/^(.+?)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*$/);
+    if(m){
+      var qty=parseFloat(m[2]);
+      var price=parseFloat(m[3]);
+      var total=parseFloat(m[4]);
+      if(qty>0 && price>0 && Math.abs(qty*price-total)<0.1){
+        parsed.push({name:m[1].trim(),qty:qty,price:price});
+        return;
+      }
+    }
+    // Simpler: name + two numbers
+    var m2=line.match(/^(.+?)\s+([\d.]+)\s+([\d.]+)\s*$/);
+    if(m2){
+      var qty2=parseFloat(m2[2]);
+      var price2=parseFloat(m2[3]);
+      if(qty2>0 && price2>0 && qty2<100){
+        parsed.push({name:m2[1].trim(),qty:qty2,price:price2});
+      }
+    }
+  });
+
+  if(storeLine) document.getElementById('storeName').value=storeLine;
+  if(invLine)   document.getElementById('invNum').value=invLine;
+  if(dateLine){
+    var d=dateLine.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$1-$2');
+    document.getElementById('recDate').value=d;
+  }
+
+  if(parsed.length>0){
+    items=parsed;
+    renderItems();
+    showStatus('✅ Extracted '+parsed.length+' items. Review & correct in the Edit tab.','success');
+    showTab('edit');
+  } else {
+    showStatus('⚠️ Could not auto-detect items. Please enter manually in the Edit tab.','warning');
+    showTab('edit');
+  }
+}
+
+// ── Export Excel ──
+function exportExcel(){
+  if(items.length===0){alert('No items to export.');return;}
+  var wb=XLSX.utils.book_new();
+
+  var store=document.getElementById('storeName').value;
+  var inv=document.getElementById('invNum').value;
+  var date=document.getElementById('recDate').value;
+  var time=document.getElementById('recTime').value;
+  var cashier=document.getElementById('cashier').value;
+  var payment=document.getElementById('payment').value;
+
+  var sub=items.reduce(function(s,it){return s+it.qty*it.price;},0);
+  var gst=document.getElementById('gstToggle').checked?sub*0.05:0;
+  var pst=document.getElementById('pstToggle').checked?sub*0.07:0;
+  var grand=sub+gst+pst;
+
+  var rows=[
+    [store],
+    ['Invoice #: '+inv,'Date: '+date,'Time: '+time],
+    ['Cashier: '+cashier,'Payment: '+payment],
+    [],
+    ['ITEM','QTY','UNIT PRICE','TOTAL'],
+  ];
+  items.forEach(function(it){
+    rows.push([it.name,it.qty,parseFloat(it.price.toFixed(2)),parseFloat((it.qty*it.price).toFixed(2))]);
+  });
+  rows.push([]);
+  rows.push(['','','Subtotal',parseFloat(sub.toFixed(2))]);
+  if(gst>0) rows.push(['','','GST (5%)',parseFloat(gst.toFixed(2))]);
+  if(pst>0) rows.push(['','','PST (7%)',parseFloat(pst.toFixed(2))]);
+  rows.push(['','','TOTAL',parseFloat(grand.toFixed(2))]);
+  rows.push(['','','Items Count',items.length]);
+  rows.push(['','','Net Payable ('+payment+')','$'+grand.toFixed(2)]);
+
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+
+  // Column widths
+  ws['!cols']=[{wch:40},{wch:8},{wch:14},{wch:14}];
+
+  // Style header row (row index 4 = row 5)
+  var hdrRow=4;
+  ['A','B','C','D'].forEach(function(col){
+    var cell=ws[col+(hdrRow+1)];
+    if(cell){cell.s={fill:{fgColor:{rgb:'7B1A1A'}},font:{color:{rgb:'FFFFFF'},bold:true}};}
+  });
+
+  XLSX.utils.book_append_sheet(wb,ws,'Receipt');
+  var fname='Receipt_'+inv+'_'+date.replace(/-/g,'')+'.xlsx';
+  XLSX.writeFile(wb,fname);
+}
+
+function exportAllExcel(){
+  if(history_data.length===0){alert('No saved receipts.');return;}
+  var wb=XLSX.utils.book_new();
+  history_data.forEach(function(rec,idx){
+    var rows=[
+      [rec.store],['Invoice #: '+rec.inv,'Date: '+rec.date,'Time: '+rec.time],
+      ['Cashier: '+rec.cashier,'Payment: '+rec.payment],[],
+      ['ITEM','QTY','UNIT PRICE','TOTAL'],
+    ];
+    rec.items.forEach(function(it){
+      rows.push([it.name,it.qty,it.price,parseFloat((it.qty*it.price).toFixed(2))]);
+    });
+    rows.push([],['','','TOTAL',parseFloat(rec.grand.toFixed(2))]);
+    var ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:40},{wch:8},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,'Receipt '+(idx+1));
+  });
+  XLSX.writeFile(wb,'All_Receipts_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+// ── Save / History ──
+function saveReceipt(){
+  if(items.length===0){alert('No items to save.');return;}
+  var sub=items.reduce(function(s,it){return s+it.qty*it.price;},0);
+  var gst=document.getElementById('gstToggle').checked?sub*0.05:0;
+  var pst=document.getElementById('pstToggle').checked?sub*0.07:0;
+  var rec={
+    id:Date.now(),
+    store:document.getElementById('storeName').value,
+    inv:document.getElementById('invNum').value,
+    date:document.getElementById('recDate').value,
+    time:document.getElementById('recTime').value,
+    cashier:document.getElementById('cashier').value,
+    payment:document.getElementById('payment').value,
+    items:JSON.parse(JSON.stringify(items)),
+    sub:sub,gst:gst,pst:pst,grand:sub+gst+pst
+  };
+  history_data.unshift(rec);
+  localStorage.setItem('receipts',JSON.stringify(history_data));
+  showStatus('✅ Receipt saved to history!','success');
+  setTimeout(function(){document.getElementById('ocrStatus').classList.add('hidden');},3000);
+}
+
+function renderHistory(){
+  var el=document.getElementById('historyList');
+  if(history_data.length===0){el.innerHTML='<p style="color:#888;font-size:14px;">No saved receipts yet.</p>';return;}
+  el.innerHTML=history_data.map(function(r,i){
+    return '<div class="hist-item">'+
+      '<div><strong style="font-size:14px;">'+r.store+'</strong>'+
+      '<div class="hist-meta">'+r.date+' &nbsp;·&nbsp; INV# '+r.inv+' &nbsp;·&nbsp; '+r.items.length+' items</div></div>'+
+      '<div style="display:flex;align-items:center;gap:10px;">'+
+      '<span class="badge">$'+r.grand.toFixed(2)+'</span>'+
+      '<div class="hist-actions">'+
+      '<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" onclick="loadHistory('+i+')">Load</button>'+
+      '<button class="btn btn-green" style="padding:5px 10px;font-size:12px;" onclick="exportSingle('+i+')">XLS</button>'+
+      '<button class="del-btn" onclick="deleteHistory('+i+')" style="font-size:18px;padding:0 6px;">✕</button>'+
+      '</div></div></div>';
+  }).join('');
+}
+
+function loadHistory(i){
+  var r=history_data[i];
+  document.getElementById('storeName').value=r.store;
+  document.getElementById('invNum').value=r.inv;
+  document.getElementById('recDate').value=r.date;
+  document.getElementById('recTime').value=r.time;
+  document.getElementById('cashier').value=r.cashier;
+  document.getElementById('payment').value=r.payment;
+  items=JSON.parse(JSON.stringify(r.items));
+  renderItems();
+  showTab('edit');
+}
+
+function exportSingle(i){
+  var r=history_data[i];
+  items=JSON.parse(JSON.stringify(r.items));
+  document.getElementById('storeName').value=r.store;
+  document.getElementById('invNum').value=r.inv;
+  document.getElementById('recDate').value=r.date;
+  exportExcel();
+}
+
+function deleteHistory(i){
+  if(!confirm('Delete this receipt?')) return;
+  history_data.splice(i,1);
+  localStorage.setItem('receipts',JSON.stringify(history_data));
+  renderHistory();
+}
+
+function showStatus(msg,type){
+  var el=document.getElementById('ocrStatus');
+  el.className='status '+type;
+  el.innerHTML=msg;
+  el.classList.remove('hidden');
+}
+
+function printReceipt(){
+  window.print();
+}
+
+// Load sample on start
+loadSample();
+</script>
+</body>
+</html>
